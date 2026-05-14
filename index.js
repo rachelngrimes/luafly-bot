@@ -56,13 +56,27 @@ client.on("interactionCreate", async interaction => {
     const hwid = interaction.options.getString("hwid");
     const reason = interaction.options.getString("reason") || "No reason provided";
     await interaction.deferReply({ ephemeral: true });
-    const res = await fetch(`${API}/api/users`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hwid, status: "blacklisted", ban_reason: reason })
-    });
-    const data = await res.json();
-    return interaction.editReply(data.success ? `✅ User blacklisted. Reason: ${reason}` : `❌ Error: ${data.error}`);
+
+    const check = await fetch(`${API}/api/users`).then(r => r.json());
+    const exists = check.find(u => u.hwid === hwid);
+
+    if (exists) {
+      const res = await fetch(`${API}/api/users`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hwid, status: "blacklisted", ban_reason: reason })
+      });
+      const data = await res.json();
+      return interaction.editReply(data.success ? `✅ User blacklisted. Reason: ${reason}` : `❌ Error: ${data.error}`);
+    } else {
+      const res = await fetch(`${API}/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hwid, username: "Unknown", status: "blacklisted", ban_reason: reason })
+      });
+      const data = await res.json();
+      return interaction.editReply(data.success ? `✅ User blacklisted. Reason: ${reason}` : `❌ Error: ${data.error}`);
+    }
   }
 
   if (interaction.commandName === "removeuser") {
