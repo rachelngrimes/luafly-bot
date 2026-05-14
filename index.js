@@ -1,3 +1,5 @@
+console.log("Token:", process.env.BOT_TOKEN ? "Found" : "NOT FOUND");
+
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require("discord.js");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
