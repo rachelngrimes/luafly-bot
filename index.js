@@ -15,7 +15,13 @@ const commands = [
   new SlashCommandBuilder().setName("removeuser").setDescription("Remove a user")
     .addStringOption(o => o.setName("hwid").setDescription("The HWID to remove").setRequired(true)),
   new SlashCommandBuilder().setName("genkey").setDescription("Generate a whitelist key")
-    .addStringOption(o => o.setName("duration").setDescription("7day, 30day, or lifetime").setRequired(true))
+    .addStringOption(o => o.setName("duration").setDescription("7day, 30day, or lifetime").setRequired(true)),
+  new SlashCommandBuilder().setName("addtokens").setDescription("Give a user reset tokens")
+    .addStringOption(o => o.setName("hwid").setDescription("The HWID").setRequired(true))
+    .addIntegerOption(o => o.setName("amount").setDescription("Amount of tokens").setRequired(true)),
+  new SlashCommandBuilder().setName("userinfo").setDescription("Get info about a user")
+    .addStringOption(o => o.setName("hwid").setDescription("The HWID to look up").setRequired(true)),
+  new SlashCommandBuilder().setName("stats").setDescription("Show overall stats"),
 ];
 
 client.once("ready", async () => {
@@ -30,7 +36,7 @@ client.on("interactionCreate", async interaction => {
 
   const ADMIN_ID = process.env.ADMIN_ID;
   if (interaction.user.id !== ADMIN_ID) {
-    return interaction.reply({ content: "You don't have permission to use this.", ephemeral: true });
+    return interaction.reply({ content: "❌ You don't have permission to use this.", ephemeral: true });
   }
 
   const API = process.env.LUAFLY_API;
@@ -67,7 +73,7 @@ client.on("interactionCreate", async interaction => {
         body: JSON.stringify({ hwid, status: "blacklisted", ban_reason: reason })
       });
       const data = await res.json();
-      return interaction.editReply(data.success ? `✅ User blacklisted. Reason: ${reason}` : `❌ Error: ${data.error}`);
+      return interaction.editReply(data.success ? `✅ User blacklisted.\n**Reason:** ${reason}` : `❌ Error: ${data.error}`);
     } else {
       const res = await fetch(`${API}/api/users`, {
         method: "POST",
@@ -75,7 +81,7 @@ client.on("interactionCreate", async interaction => {
         body: JSON.stringify({ hwid, username: "Unknown", status: "blacklisted", ban_reason: reason })
       });
       const data = await res.json();
-      return interaction.editReply(data.success ? `✅ User blacklisted. Reason: ${reason}` : `❌ Error: ${data.error}`);
+      return interaction.editReply(data.success ? `✅ User blacklisted.\n**Reason:** ${reason}` : `❌ Error: ${data.error}`);
     }
   }
 
@@ -104,6 +110,51 @@ client.on("interactionCreate", async interaction => {
     });
     const data = await res.json();
     return interaction.editReply(data.success ? `✅ Key generated!\n\`${data.keys[0]}\`` : `❌ Error: ${data.error}`);
+  }
+
+  if (interaction.commandName === "addtokens") {
+    const hwid = interaction.options.getString("hwid");
+    const amount = interaction.options.getInteger("amount");
+    await interaction.deferReply({ ephemeral: true });
+    const res = await fetch(`${API}/api/addtokens`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hwid, amount })
+    });
+    const data = await res.json();
+    return interaction.editReply(data.success ? `✅ Added **${amount}** token(s)!\n🪙 Total: **${data.tokens}**` : `❌ Error: ${data.error}`);
+  }
+
+  if (interaction.commandName === "userinfo") {
+    const hwid = interaction.options.getString("hwid");
+    await interaction.deferReply({ ephemeral: true });
+    const res = await fetch(`${API}/api/status?hwid=${hwid}`);
+    const data = await res.json();
+    if (data.status === "not_found") return interaction.editReply("❌ User not found.");
+    return interaction.editReply(
+      `👤 **${data.username || "Unknown"}**\n` +
+      `**Status:** ${data.status}\n` +
+      `**Expires:** ${data.expires_at ? new Date(data.expires_at).toLocaleDateString() : "Lifetime"}\n` +
+      `**Resets left:** ${data.hwid_resets_left ?? 0}\n` +
+      `**Tokens:** ${data.tokens ?? 0}\n` +
+      `**Member since:** ${data.created_at ? new Date(data.created_at).toLocaleDateString() : "Unknown"}`
+    );
+  }
+
+  if (interaction.commandName === "stats") {
+    await interaction.deferReply({ ephemeral: true });
+    const users = await fetch(`${API}/api/users`).then(r => r.json());
+    const logs = await fetch(`${API}/api/logs?filter=today`).then(r => r.json());
+    const wl = users.filter(u => u.status === "whitelisted").length;
+    const bl = users.filter(u => u.status === "blacklisted").length;
+    const exec = logs.filter(l => l.action === "executed").length;
+    return interaction.editReply(
+      `📊 **Luafly Stats**\n` +
+      `**Total Users:** ${users.length}\n` +
+      `**Whitelisted:** ${wl}\n` +
+      `**Blacklisted:** ${bl}\n` +
+      `**Executions Today:** ${exec}`
+    );
   }
 });
 
